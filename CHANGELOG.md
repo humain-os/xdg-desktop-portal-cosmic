@@ -1,3 +1,10 @@
+## [1.1.5](https://github.com/playtron-os/xdg-desktop-portal-cosmic/compare/v1.1.4...v1.1.5) (2026-11-02)
+
+
+### Bug Fixes
+
+* **deps:** tint a named icon only when its file is symbolic ([2abe2e3](https://github.com/playtron-os/xdg-desktop-portal-cosmic/commit/2abe2e3e93a079ff2852209bde2dbffefe964259))
+
 ## [1.1.4](https://github.com/playtron-os/xdg-desktop-portal-cosmic/compare/v1.1.3...v1.1.4) (2026-11-02)
 
 
