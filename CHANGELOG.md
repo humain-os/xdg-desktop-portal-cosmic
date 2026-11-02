@@ -1,3 +1,11 @@
+## [1.1.4](https://github.com/playtron-os/xdg-desktop-portal-cosmic/compare/v1.1.3...v1.1.4) (2026-11-02)
+
+
+### Bug Fixes
+
+* **access:** draw the dialog's icon and drop the compositor header ([fd1343c](https://github.com/playtron-os/xdg-desktop-portal-cosmic/commit/fd1343c1e1d3716a5bdd58690e32eb6da59ad612))
+* **screencast:** show the asking app's icon and its own name ([610c84f](https://github.com/playtron-os/xdg-desktop-portal-cosmic/commit/610c84fc9c7867cc3c96cf16b55f8c61836a81dd))
+
 ## [1.1.3](https://github.com/playtron-os/xdg-desktop-portal-cosmic/compare/v1.1.2...v1.1.3) (2026-10-11)
 
 
