@@ -196,10 +196,10 @@ fn modal_window_settings() -> window::Settings {
     }
 }
 
-/// Tints the icon only when the file found is symbolic. libcosmic tints whatever
-/// a `-symbolic` name resolves to, turning a colour fallback into a solid block.
+/// The requested icon, or `None` when no theme ships it.
 fn hero_icon(named: icon::Named) -> Option<icon::Handle> {
-    named.size(HERO_ICON_SLOT).path().map(icon::from_path)
+    let named = named.size(HERO_ICON_SLOT);
+    named.clone().path().is_some().then(|| named.handle())
 }
 
 pub(crate) fn view(portal: &CosmicPortal) -> cosmic::Element<'_, Msg> {
