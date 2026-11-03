@@ -21,7 +21,7 @@ use std::collections::HashMap;
 use std::io::ErrorKind;
 use std::os::fd::{AsFd, OwnedFd};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Condvar, Mutex, Weak};
+use std::sync::{Arc, Condvar, Mutex, OnceLock, Weak};
 use std::thread;
 use wayland_client::backend::WaylandError;
 use wayland_client::globals::{GlobalError, registry_queue_init};
@@ -176,6 +176,18 @@ fn wait_until_writable(conn: &Connection) {
     let _ = rustix::event::poll(&mut fds, None);
 }
 
+/// The compositor connection, which the event loop shares.
+static CONNECTION: OnceLock<Connection> = OnceLock::new();
+
+/// Why the compositor connection failed, once it has.
+pub fn connection_error() -> Option<WaylandError> {
+    match CONNECTION.get()?.flush() {
+        Err(WaylandError::Io(err)) if err.kind() == ErrorKind::WouldBlock => None,
+        Err(err) => Some(err),
+        Ok(()) => None,
+    }
+}
+
 /// The portal's exit status once its Wayland connection has failed.
 fn exit_code(err: &WaylandError) -> i32 {
     match err {
@@ -186,7 +198,7 @@ fn exit_code(err: &WaylandError) -> i32 {
 }
 
 /// Ends the portal: without its compositor it has nothing to show or capture.
-fn exit_on_wayland_error(err: WaylandError) -> ! {
+pub fn exit_on_wayland_error(err: WaylandError) -> ! {
     let code = exit_code(&err);
     if code == 0 {
         tracing::info!("compositor connection closed ({err}); exiting");
@@ -356,6 +368,7 @@ impl CursorSession {
 
 impl WaylandHelper {
     pub fn new(conn: wayland_client::Connection) -> Self {
+        let _ = CONNECTION.set(conn.clone());
         let (globals, mut event_queue) = match registry_queue_init(&conn) {
             Ok(init) => init,
             Err(GlobalError::Backend(err)) => exit_on_wayland_error(err),

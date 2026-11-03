@@ -366,5 +366,12 @@ fn main() -> cosmic::iced::Result {
 
     localize::localize();
 
-    app::run()
+    let result = app::run();
+    // The event loop also fails when the compositor goes away, as it does at sign-out.
+    if result.is_err()
+        && let Some(err) = wayland::connection_error()
+    {
+        wayland::exit_on_wayland_error(err);
+    }
+    result
 }
