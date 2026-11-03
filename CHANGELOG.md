@@ -1,3 +1,11 @@
+## [1.1.6](https://github.com/playtron-os/xdg-desktop-portal-cosmic/compare/v1.1.5...v1.1.6) (2026-11-03)
+
+
+### Bug Fixes
+
+* exit cleanly when the compositor goes away ([0033f28](https://github.com/playtron-os/xdg-desktop-portal-cosmic/commit/0033f28e777ca9e0b2d977bc2fbc223c0bd77016))
+* exit cleanly when the event loop sees the compositor go first ([11d45d4](https://github.com/playtron-os/xdg-desktop-portal-cosmic/commit/11d45d4c237096365ec4b1406c64bc1ef98e032b))
+
 ## [1.1.5](https://github.com/playtron-os/xdg-desktop-portal-cosmic/compare/v1.1.4...v1.1.5) (2026-11-02)
 
 
