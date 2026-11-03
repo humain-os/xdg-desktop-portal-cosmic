@@ -18,13 +18,15 @@ use cosmic_client_toolkit::workspace::WorkspaceState;
 use futures::channel::oneshot;
 use futures::stream::{FuturesOrdered, Stream, StreamExt};
 use std::collections::HashMap;
+use std::io::ErrorKind;
 use std::os::fd::{AsFd, OwnedFd};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Condvar, Mutex, Weak};
+use std::sync::{Arc, Condvar, Mutex, OnceLock, Weak};
 use std::thread;
-use wayland_client::globals::registry_queue_init;
+use wayland_client::backend::WaylandError;
+use wayland_client::globals::{GlobalError, registry_queue_init};
 use wayland_client::protocol::{wl_buffer, wl_output, wl_pointer, wl_seat, wl_shm, wl_shm_pool};
-use wayland_client::{Connection, Dispatch, QueueHandle, WEnum};
+use wayland_client::{Connection, Dispatch, DispatchError, EventQueue, QueueHandle, WEnum};
 use wayland_protocols::ext::foreign_toplevel_list::v1::client::ext_foreign_toplevel_handle_v1::ExtForeignToplevelHandleV1;
 use wayland_protocols::ext::workspace::v1::client::ext_workspace_handle_v1;
 use wayland_protocols::wp::linux_dmabuf::zv1::client::zwp_linux_buffer_params_v1::{
@@ -130,6 +132,81 @@ impl Drop for AppData {
         tracing::error!("wayland thread crash; terminating");
         std::process::exit(1);
     }
+}
+
+/// Dispatches events until the connection fails, and returns why.
+fn dispatch_until_error<D>(
+    conn: &Connection,
+    event_queue: &mut EventQueue<D>,
+    data: &mut D,
+) -> WaylandError {
+    loop {
+        match event_queue.blocking_dispatch(data) {
+            Ok(_) => {}
+            Err(DispatchError::Backend(WaylandError::Io(err)))
+                if err.kind() == ErrorKind::WouldBlock =>
+            {
+                wait_until_writable(conn);
+            }
+            Err(DispatchError::Backend(err)) => return err,
+            // The connection is still usable; skip the malformed message
+            Err(err @ DispatchError::BadMessage { .. }) => {
+                tracing::error!("wayland dispatch: {err}");
+            }
+        }
+    }
+}
+
+/// Sends queued requests. A full socket is left to the next flush.
+fn flush(conn: &Connection) {
+    match conn.flush() {
+        Ok(()) => {}
+        Err(WaylandError::Io(err)) if err.kind() == ErrorKind::WouldBlock => {}
+        Err(err) => exit_on_wayland_error(err),
+    }
+}
+
+fn wait_until_writable(conn: &Connection) {
+    let backend = conn.backend();
+    let fd = backend.poll_fd();
+    let mut fds = [rustix::event::PollFd::new(
+        &fd,
+        rustix::event::PollFlags::OUT,
+    )];
+    let _ = rustix::event::poll(&mut fds, None);
+}
+
+/// The compositor connection, which the event loop shares.
+static CONNECTION: OnceLock<Connection> = OnceLock::new();
+
+/// Why the compositor connection failed, once it has.
+pub fn connection_error() -> Option<WaylandError> {
+    match CONNECTION.get()?.flush() {
+        Err(WaylandError::Io(err)) if err.kind() == ErrorKind::WouldBlock => None,
+        Err(err) => Some(err),
+        Ok(()) => None,
+    }
+}
+
+/// The portal's exit status once its Wayland connection has failed.
+fn exit_code(err: &WaylandError) -> i32 {
+    match err {
+        // The compositor went away, usually because the session ended
+        WaylandError::Io(_) => 0,
+        WaylandError::Protocol(_) => 1,
+    }
+}
+
+/// Ends the portal: without its compositor it has nothing to show or capture.
+pub fn exit_on_wayland_error(err: WaylandError) -> ! {
+    let code = exit_code(&err);
+    if code == 0 {
+        tracing::info!("compositor connection closed ({err}); exiting");
+    } else {
+        tracing::error!("wayland connection failed ({err}); exiting");
+    }
+    // Exit here rather than unwinding, so AppData's drop does not report a crash
+    std::process::exit(code)
 }
 
 impl AppData {
@@ -242,7 +319,7 @@ impl Session {
                 sender: Mutex::new(Some(sender)),
             },
         );
-        self.0.wayland_helper.inner.conn.flush().unwrap();
+        flush(&self.0.wayland_helper.inner.conn);
 
         // TODO: wait for server to release buffer?
         // Assume stopped if frame is dropped without `ready` or `failed`
@@ -291,8 +368,12 @@ impl CursorSession {
 
 impl WaylandHelper {
     pub fn new(conn: wayland_client::Connection) -> Self {
-        // XXX unwrap
-        let (globals, mut event_queue) = registry_queue_init(&conn).unwrap();
+        let _ = CONNECTION.set(conn.clone());
+        let (globals, mut event_queue) = match registry_queue_init(&conn) {
+            Ok(init) => init,
+            Err(GlobalError::Backend(err)) => exit_on_wayland_error(err),
+            Err(err @ GlobalError::InvalidId(_)) => panic!("wayland registry: {err}"),
+        };
         let qh = event_queue.handle();
         let registry_state = RegistryState::new(&globals);
         let screencopy_state = ScreencopyState::new(&globals, &qh);
@@ -328,14 +409,18 @@ impl WaylandHelper {
             registry_state,
             seat_state: SeatState::new(&globals, &qh),
         };
-        event_queue.flush().unwrap();
-
-        event_queue.roundtrip(&mut data).unwrap();
-
-        thread::spawn(move || {
-            loop {
-                event_queue.blocking_dispatch(&mut data).unwrap();
+        flush(&wayland_helper.inner.conn);
+        match event_queue.roundtrip(&mut data) {
+            Ok(_) => {}
+            Err(DispatchError::Backend(err)) => exit_on_wayland_error(err),
+            Err(err @ DispatchError::BadMessage { .. }) => {
+                tracing::error!("wayland roundtrip: {err}");
             }
+        }
+
+        let conn = wayland_helper.inner.conn.clone();
+        thread::spawn(move || {
+            exit_on_wayland_error(dispatch_until_error(&conn, &mut event_queue, &mut data))
         });
 
         wayland_helper
@@ -430,7 +515,7 @@ impl WaylandHelper {
                 )
                 .unwrap();
 
-            self.inner.conn.flush().unwrap();
+            flush(&self.inner.conn);
 
             SessionInner {
                 wayland_helper: self.clone(),
@@ -995,3 +1080,56 @@ sctk::delegate_dmabuf!(AppData);
 sctk::delegate_seat!(AppData);
 sctk::delegate_pointer!(AppData);
 cosmic_client_toolkit::delegate_screencopy!(AppData);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::net::UnixStream;
+    use wayland_client::backend::protocol::ProtocolError;
+    use wayland_client::protocol::wl_callback;
+
+    struct State;
+
+    impl Dispatch<wl_callback::WlCallback, ()> for State {
+        fn event(
+            _: &mut Self,
+            _: &wl_callback::WlCallback,
+            _: wl_callback::Event,
+            _: &(),
+            _: &Connection,
+            _: &QueueHandle<Self>,
+        ) {
+        }
+    }
+
+    fn dispatch_after_the_compositor_quits(request_waiting: bool) -> WaylandError {
+        let (socket, compositor) = UnixStream::pair().unwrap();
+        let conn = Connection::from_socket(socket).unwrap();
+        let mut event_queue = conn.new_event_queue();
+        if request_waiting {
+            conn.display().sync(&event_queue.handle(), ());
+        }
+        drop(compositor);
+        dispatch_until_error(&conn, &mut event_queue, &mut State)
+    }
+
+    #[test]
+    fn a_compositor_that_quits_ends_the_portal_cleanly() {
+        for request_waiting in [false, true] {
+            let err = dispatch_after_the_compositor_quits(request_waiting);
+            assert!(matches!(err, WaylandError::Io(_)), "{err}");
+            assert_eq!(exit_code(&err), 0, "{err}");
+        }
+    }
+
+    #[test]
+    fn a_protocol_error_ends_the_portal_with_a_failure() {
+        let err = WaylandError::Protocol(ProtocolError {
+            code: 0,
+            object_id: 1,
+            object_interface: "wl_display".into(),
+            message: "invalid object".into(),
+        });
+        assert_eq!(exit_code(&err), 1);
+    }
+}
