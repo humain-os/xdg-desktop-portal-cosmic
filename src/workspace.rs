@@ -14,8 +14,8 @@ use std::collections::HashMap;
 use zbus::names::BusName;
 use zbus::zvariant::ObjectPath;
 
-const REGISTRY: &str = "one.playtron.Workspaces1";
-const OBJECT: &str = "/one/playtron/Workspaces1";
+const REGISTRY: &str = "inc.kora.Workspaces1";
+const OBJECT: &str = "/inc/kora/Workspaces1";
 
 /// The request handle's shape: the caller's unique name, `:` dropped and
 /// `.` as `_`, then the token.
