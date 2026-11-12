@@ -655,7 +655,7 @@ mod tests {
 
     #[test]
     fn the_picker_names_and_shows_the_app_the_portal_registered() {
-        let id = "one.playtron.Workspace.work.firefox";
+        let id = "inc.kora.Workspace.work.firefox";
         let entries = [
             machine_firefox(),
             registered(id, "Firefox in Work", "firefox"),
@@ -673,7 +673,7 @@ mod tests {
     /// wins wherever it is listed.
     #[test]
     fn an_app_is_never_named_after_another_by_its_ids_last_part() {
-        let id = "one.playtron.Workspace.work.com.example.firefox";
+        let id = "inc.kora.Workspace.work.com.example.firefox";
         let entries = [
             machine_firefox(),
             registered(id, "Example in Work", "example"),
