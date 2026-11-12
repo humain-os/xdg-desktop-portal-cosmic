@@ -1,3 +1,10 @@
+## [1.1.7](https://github.com/kora-desktop/xdg-desktop-portal-cosmic/compare/v1.1.6...v1.1.7) (2026-11-12)
+
+
+### Bug Fixes
+
+* **dbus:** call the workspace registry at inc.kora ([44117eb](https://github.com/kora-desktop/xdg-desktop-portal-cosmic/commit/44117eb00dd27a5c1c7a6054e442adf7e0a50d67))
+
 ## [1.1.6](https://github.com/playtron-os/xdg-desktop-portal-cosmic/compare/v1.1.5...v1.1.6) (2026-11-03)
 
 
