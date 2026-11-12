@@ -1,3 +1,18 @@
+# [2.0.0](https://github.com/kora-desktop/xdg-desktop-portal-cosmic/compare/v1.1.7...v2.0.0) (2026-11-12)
+
+
+### Bug Fixes
+
+* **appid:** use inc.kora ids in the picker tests ([f49a0ca](https://github.com/kora-desktop/xdg-desktop-portal-cosmic/commit/f49a0ca6a3456fe7819c4c0c2c7e398fdea7ae8e))
+* **dbus:** mark the inc.kora D-Bus move as breaking ([276d785](https://github.com/kora-desktop/xdg-desktop-portal-cosmic/commit/276d785bccc67bd4d463b8a6bcac14a8d611674b))
+
+
+### BREAKING CHANGES
+
+* **dbus:** D-Bus names moved from one.playtron to inc.kora
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+
 ## [1.1.7](https://github.com/kora-desktop/xdg-desktop-portal-cosmic/compare/v1.1.6...v1.1.7) (2026-11-12)
 
 
